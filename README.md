@@ -1,7 +1,7 @@
 AI Generated, didn't even look at the code, but does the job.
 I actually created this manually for waybar in the past... ain't doing that again ;)
 
-# Active Workspaces
+# Decent Workspaces
 
 ![Workspace 1 active with a browser icon, workspace 4 with browser, files and terminal icons](preview.png)
 
@@ -24,8 +24,8 @@ workspaces.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/TheTrueFerret/omarchy-propper-workspaces.git --enable
-omarchy bar put io.github.thetrueferret.workspaces --section left --index 1
+omarchy plugin add https://github.com/TheTrueFerret/omarchy-decent-workspaces.git --enable
+omarchy bar put io.github.thetrueferret.decent-workspaces --section left --index 1
 ```
 
 You probably want to drop the stock widget at the same time, since two workspace
@@ -38,7 +38,7 @@ omarchy plugin disable omarchy.workspaces
 ## Settings
 
 Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
-`omarchy bar set io.github.thetrueferret.workspaces <key> <value>`:
+`omarchy bar set io.github.thetrueferret.decent-workspaces <key> <value>`:
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -51,8 +51,8 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
 Example — cap icons at four and keep empty workspaces visible:
 
 ```bash
-omarchy bar set io.github.thetrueferret.workspaces maxIcons 4 --json
-omarchy bar set io.github.thetrueferret.workspaces showEmpty true --json
+omarchy bar set io.github.thetrueferret.decent-workspaces maxIcons 4 --json
+omarchy bar set io.github.thetrueferret.decent-workspaces showEmpty true --json
 ```
 
 ## Adding an app icon
@@ -74,13 +74,13 @@ Then add a rule and save; the shell hot-reloads local plugins.
 ## Uninstall
 
 ```bash
-omarchy plugin remove io.github.thetrueferret.workspaces
+omarchy plugin remove io.github.thetrueferret.decent-workspaces
 ```
 
 ## Development
 
 ```bash
-omarchy plugin validate ~/.config/omarchy/plugins/io.github.thetrueferret.workspaces
+omarchy plugin validate ~/.config/omarchy/plugins/io.github.thetrueferret.decent-workspaces
 qmllint -I ~/.local/share/omarchy/shell Workspaces.qml
 qs log -i "$(qs list --all | awk '/^Instance/ {print substr($2, 1, length($2)-1); exit}')"
 ```

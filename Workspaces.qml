@@ -11,7 +11,7 @@ import "IconRules.js" as IconRules
 // labelled with its number plus an icon per open window.
 BarWidget {
   id: root
-  moduleName: "io.github.thetrueferret.workspaces"
+  moduleName: "io.github.thetrueferret.decent-workspaces"
 
   // --- settings, read from this widget's shell.json layout entry ------------
   readonly property bool perMonitor: root.setting("perMonitor", true)

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.thetrueferret.workspaces",
-  "name": "Active Workspaces",
+  "id": "io.github.thetrueferret.decent-workspaces",
+  "name": "Decent Workspaces",
   "version": "1.0.0",
   "author": "TheTrueFerret",
   "license": "MIT",
@@ -13,7 +13,7 @@
     "barWidget": "Workspaces.qml"
   },
   "barWidget": {
-    "displayName": "Active Workspaces",
+    "displayName": "Decent Workspaces",
     "description": "Only the workspaces in use, on the monitor they belong to, with app icons",
     "category": "Compositor",
     "allowMultiple": false,
