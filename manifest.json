@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.thetrueferret.workspaces",
+  "name": "Active Workspaces",
+  "version": "1.0.0",
+  "author": "TheTrueFerret",
+  "license": "MIT",
+  "description": "Per-monitor workspace indicators: shows only workspaces with windows, with an app icon beside each workspace number",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Workspaces.qml"
+  },
+  "barWidget": {
+    "displayName": "Active Workspaces",
+    "description": "Only the workspaces in use, on the monitor they belong to, with app icons",
+    "category": "Compositor",
+    "allowMultiple": false,
+    "defaultSection": "left"
+  }
+}
