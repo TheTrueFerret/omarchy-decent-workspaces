@@ -1,3 +1,6 @@
+AI Generated, didn't even look at the code, but does the job.
+I actually created this manually for waybar in the past... ain't doing that again ;)
+
 # Active Workspaces
 
 ![Workspace 1 active with a browser icon, workspace 4 with browser, files and terminal icons](preview.png)
