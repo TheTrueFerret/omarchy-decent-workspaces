@@ -5,7 +5,9 @@
 //
 // ORDER MATTERS. Title-specific rules have to sit above the generic browser
 // class rules, otherwise an Amazon or YouTube tab in Firefox resolves to the
-// Firefox icon instead of its own.
+// Firefox icon instead of its own. `resolve()` keeps that working for browsers
+// while stopping the same title rules from hijacking native apps -- see the
+// comment there.
 //
 // Icon map adapted from the `saif.workspaces` plugin by Saif Omar (MIT).
 var rules = [
@@ -117,6 +119,17 @@ var rules = [
 
 var fallback = "󰘔"
 
+// Classes that host something else and report it in the title: browsers show
+// the page, terminals show the running program. For these the title is the
+// better signal, so it is matched before the (generic) class rule. Every other
+// class describes the app itself and is matched first.
+var hostClasses = new RegExp(
+  "^(firefox|org\\.mozilla\\.firefox|librewolf|floorp|mercury-browser|[Cc]achy-browser"
+  + "|zen|waterfox|waterfox-bin|microsoft-edge|brave|brave-browser|Brave|Brave-browser"
+  + "|Chromium|Thorium|[Cc]hrome|chrome-.*|tor browser"
+  + "|konsole|foot|kitty|[Aa]lacritty|com\\.mitchellh\\.ghostty"
+  + "|org\\.wezfurlong\\.wezterm)$", "i")
+
 // Rules are compiled once per QML engine rather than per render. `.pragma
 // library` means one shared copy across all three bar instances.
 var compiled = null
@@ -142,11 +155,34 @@ function resolve(cls, title) {
   if (hit !== undefined) return hit
 
   var set = patterns()
+  var isHost = hostClasses.test(cls)
+
+  // Matching title and class in a single pass lets a title rule win over the
+  // window's own class: a Slack channel called "tech-log-github-pr" resolves to
+  // the GitHub icon because `.*github.*` is tested long before `slack`.
+  //
+  // For an app that is not hosting anything, the class is authoritative, so it
+  // is matched on its own first. Hosts are excluded from that pass -- their
+  // class is a generic browser/terminal rule, and letting it win would undo the
+  // site and `nvim` rules entirely.
   var icon = fallback
-  for (var i = 0; i < set.length; i++) {
-    if (set[i].re.test(title) || set[i].re.test(cls)) {
-      icon = set[i].icon
-      break
+  var i
+  if (!isHost) {
+    for (i = 0; i < set.length; i++) {
+      if (set[i].re.test(cls)) { icon = set[i].icon; break }
+    }
+  }
+
+  // Title next (site/program rules for hosts, and a useful fallback for
+  // anything whose class did not match), then the host's own class last.
+  if (icon === fallback) {
+    for (i = 0; i < set.length; i++) {
+      if (set[i].re.test(title)) { icon = set[i].icon; break }
+    }
+  }
+  if (icon === fallback && isHost) {
+    for (i = 0; i < set.length; i++) {
+      if (set[i].re.test(cls)) { icon = set[i].icon; break }
     }
   }
 
