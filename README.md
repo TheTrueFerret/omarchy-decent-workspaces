@@ -43,7 +43,7 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `perMonitor` | `true` | Show only workspaces belonging to this bar's monitor. Set `false` to show all of them on every bar. |
-| `showEmpty` | `false` | Show workspaces with no windows. Set `true` for stock-like behaviour. |
+| `showEmpty` | `false` | Show workspace numbers that have no windows, up to `maxWorkspaceId`. |
 | `showIcons` | `true` | Draw an app icon per open window. |
 | `maxIcons` | `0` | Cap icons per workspace, collapsing the rest to `+N`. `0` means no cap. |
 | `maxWorkspaceId` | `10` | Highest workspace id to consider. |

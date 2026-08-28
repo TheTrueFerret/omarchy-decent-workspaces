@@ -2,13 +2,14 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "IconRules.js" as IconRules
 
-// Workspace indicators that show only what is actually there: workspaces with
-// windows on them, filtered to the monitor this bar instance lives on, each
-// labelled with its number plus an icon per open window.
+// Workspace indicators filtered to the monitor this bar instance lives on,
+// labelled with a number plus an icon per open window. Empty unused IDs are
+// omitted unless showEmpty is set, in which case they are synthesised.
 BarWidget {
   id: root
   moduleName: "io.github.thetrueferret.decent-workspaces"
@@ -65,7 +66,7 @@ BarWidget {
   property int revision: 0
 
   readonly property var windowEvents: ["openwindow", "closewindow", "movewindow", "movewindowv2", "windowtitle", "windowtitlev2", "activewindow", "activewindowv2", "urgent"]
-  readonly property var workspaceEvents: ["workspace", "workspacev2", "createworkspace", "createworkspacev2", "destroyworkspace", "destroyworkspacev2", "moveworkspace", "moveworkspacev2", "focusedmon"]
+  readonly property var workspaceEvents: ["workspace", "workspacev2", "createworkspace", "createworkspacev2", "destroyworkspace", "destroyworkspacev2", "moveworkspace", "moveworkspacev2", "focusedmon", "configreloaded"]
 
   Connections {
     target: Hyprland
@@ -76,12 +77,17 @@ BarWidget {
         root.revision++
       } else if (root.workspaceEvents.indexOf(name) !== -1) {
         Hyprland.refreshWorkspaces()
+        if (name === "configreloaded") root.refreshRules()
         root.revision++
       }
     }
   }
 
   // --- model ---------------------------------------------------------------
+  // Hyprland only reports workspaces that currently exist. Empty unused IDs
+  // are missing from that list, so showEmpty has to synthesise them rather
+  // than filter live objects. The Repeater therefore iterates IDs; a missing
+  // workspace looks up as null and is still a valid empty pill.
   function hasWindows(workspace) {
     if (!workspace) return false
     var tops = workspace.toplevels ? workspace.toplevels.values : null
@@ -98,36 +104,178 @@ BarWidget {
     return ""
   }
 
-  readonly property var visibleWorkspaces: {
+  function workspaceById(id) {
     var _ = root.revision
+    var values = Hyprland.workspaces.values
+    for (var i = 0; i < values.length; i++) {
+      if (values[i].id === id) return values[i]
+    }
+    return null
+  }
+
+  function focusWorkspace(id) {
+    if (!root.bar) return
+    root.bar.run("hyprctl dispatch " + Util.shellQuote('hl.dsp.focus({ workspace = "' + id + '" })'))
+  }
+
+  // Empty IDs are attributed from Hyprland workspace rules when those exist,
+  // so sequential (1-5 / 6-10) and interleaved (odds / evens) layouts both
+  // work. Live occupancy still wins if a workspace has already been created.
+  property var workspaceRules: []
+  property bool rulesPending: false
+  property bool rulesLoaded: false
+
+  function refreshRules() {
+    if (rulesProc.running) {
+      root.rulesPending = true
+      return
+    }
+    rulesProc.running = true
+  }
+
+  function ruleMonitorMatches(spec, mine, mineDesc) {
+    if (!spec) return false
+    var value = String(spec)
+    if (value === mine) return true
+    if (value.indexOf("desc:") === 0) {
+      var desc = value.slice(5)
+      return mineDesc !== "" && desc === mineDesc
+    }
+    return false
+  }
+
+  function resolveRuleMonitor(spec) {
+    var _ = root.revision
+    if (!spec) return ""
+    var monitors = Hyprland.monitors.values
+    for (var i = 0; i < monitors.length; i++) {
+      var name = String(monitors[i].name)
+      var desc = ""
+      var ipc = monitors[i].lastIpcObject
+      if (ipc && ipc.description) desc = String(ipc.description)
+      else if (monitors[i].description) desc = String(monitors[i].description)
+      if (root.ruleMonitorMatches(spec, name, desc)) return name
+    }
+    return ""
+  }
+
+  function ruleOwnerById(maxId) {
+    var rules = root.workspaceRules
+    var map = {}
+    for (var i = 0; i < rules.length; i++) {
+      var id = rules[i].id
+      if (id <= 0 || id > maxId) continue
+      var name = root.resolveRuleMonitor(rules[i].monitor)
+      if (name) map[id] = name
+    }
+    return map
+  }
+
+  function workspaceIds() {
+    var _ = root.revision
+    var __ = root.workspaceRules
+    var ___ = root.rulesLoaded
     var mine = root.screenName
     var active = root.activeId
-    var result = []
+    var maxId = root.maxWorkspaceId
     var values = Hyprland.workspaces.values
+    var mineIds = []
+    var owners = {}
+    var known = []
 
     for (var i = 0; i < values.length; i++) {
       var workspace = values[i]
       var id = workspace.id
-      if (id <= 0 || id > root.maxWorkspaceId) continue
-
-      if (root.perMonitor && mine !== "") {
-        var owner = root.monitorNameOf(workspace)
-        // An unknown owner is kept rather than dropped: better a stray pill
-        // than a workspace that silently vanishes from every bar.
-        if (owner !== "" && owner !== mine) continue
+      if (id <= 0 || id > maxId) continue
+      var owner = root.monitorNameOf(workspace)
+      if (owner !== "") {
+        owners[id] = owner
+        known.push(id)
       }
+      if (root.perMonitor && mine !== "" && owner !== "" && owner !== mine) continue
+      mineIds.push(id)
+    }
+    known.sort(function(left, right) { return left - right })
 
-      // The active workspace stays pinned even when empty, otherwise stepping
-      // onto a fresh workspace leaves the bar with nothing to point at.
-      if (!root.showEmpty && !root.hasWindows(workspace) && id !== active) continue
-
-      result.push(workspace)
+    if (!root.showEmpty) {
+      var occupied = []
+      for (var i = 0; i < mineIds.length; i++) {
+        var id = mineIds[i]
+        if (id !== active && !root.hasWindows(root.workspaceById(id))) continue
+        occupied.push(id)
+      }
+      occupied.sort(function(left, right) { return left - right })
+      return occupied
     }
 
-    result.sort(function(left, right) { return left.id - right.id })
-    return result
+    if (!root.perMonitor) {
+      var all = []
+      for (var n = 1; n <= maxId; n++) all.push(n)
+      return all
+    }
+
+    if (mine === "") return []
+
+    // Live-only until the first workspacerules read; [] means "not loaded"
+    // and "no rules" otherwise, and fallback would flash the wrong layout.
+    if (!root.rulesLoaded) {
+      var pending = mineIds.slice()
+      if (active > 0 && active <= maxId && pending.indexOf(active) === -1) {
+        if (owners[active] === undefined || owners[active] === mine) pending.push(active)
+      }
+      pending.sort(function(left, right) { return left - right })
+      return pending
+    }
+
+    var ruleOwners = root.ruleOwnerById(maxId)
+    var firstOwner = known.length > 0 ? owners[known[0]] : ""
+    var pred = 0
+    var filled = []
+    for (var n = 1; n <= maxId; n++) {
+      if (owners[n]) pred = n
+      var owner = owners[n] || ruleOwners[n] || (pred > 0 ? owners[pred] : firstOwner)
+      if (owner === mine) filled.push(n)
+    }
+    if (filled.length === 0 && active > 0 && active <= maxId && (owners[active] === undefined || owners[active] === mine)) {
+      return [active]
+    }
+    return filled
   }
 
+  Process {
+    id: rulesProc
+    command: ["hyprctl", "-j", "workspacerules"]
+    running: true
+    onRunningChanged: {
+      if (!running && root.rulesPending) {
+        root.rulesPending = false
+        root.refreshRules()
+      }
+    }
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var listed
+        try {
+          listed = JSON.parse(text || "[]")
+        } catch (e) {
+          return
+        }
+        if (!Array.isArray(listed)) return
+        var parsed = []
+        for (var i = 0; i < listed.length; i++) {
+          var row = listed[i]
+          if (!row || row.enabled === false) continue
+          var id = parseInt(row.workspaceString, 10)
+          if (!(id > 0)) continue
+          parsed.push({ id: id, monitor: String(row.monitor || "") })
+        }
+        root.workspaceRules = parsed
+        root.rulesLoaded = true
+        root.revision++
+      }
+    }
+  }
   // --- icons ---------------------------------------------------------------
   function windowClass(toplevel) {
     var ipc = toplevel ? toplevel.lastIpcObject : null
@@ -199,19 +347,19 @@ BarWidget {
       anchors.right: parent.right
       anchors.rightMargin: Style.spaceReal(4)
       anchors.verticalCenter: parent.verticalCenter
-      columns: root.vertical ? 1 : Math.max(1, root.visibleWorkspaces.length)
+      columns: root.vertical ? 1 : Math.max(1, root.workspaceIds().length)
       columnSpacing: root.vertical ? 0 : Style.spaceReal(4)
       rowSpacing: root.vertical ? Style.spaceReal(4) : 0
 
       Repeater {
-        model: root.visibleWorkspaces
+        model: root.workspaceIds()
 
         Rectangle {
           id: pill
-          required property var modelData
+          required property int modelData
 
-          readonly property var workspace: pill.modelData
-          readonly property int workspaceId: pill.workspace ? pill.workspace.id : -1
+          readonly property int workspaceId: pill.modelData
+          readonly property var workspace: root.workspaceById(pill.workspaceId)
           readonly property bool active: pill.workspaceId === root.activeId
           readonly property bool urgent: pill.workspace !== null && pill.workspace.urgent === true
           property bool hovered: false
@@ -257,7 +405,7 @@ BarWidget {
             cursorShape: Qt.PointingHandCursor
             onEntered: pill.hovered = true
             onExited: pill.hovered = false
-            onClicked: if (pill.workspace) pill.workspace.activate()
+            onClicked: root.focusWorkspace(pill.workspaceId)
           }
         }
       }
