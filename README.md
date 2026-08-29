@@ -45,6 +45,8 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
 | `perMonitor` | `true` | Show only workspaces belonging to this bar's monitor. Set `false` to show all of them on every bar. |
 | `showEmpty` | `false` | Show workspaces with no windows. Set `true` for stock-like behaviour. |
 | `showIcons` | `true` | Draw an app icon per open window. |
+| `localWorkspaceNumbers` | `false` | Show each fixed-size workspace bank as local numbers starting at 1. |
+| `workspacesPerMonitor` | `10` | Number of workspaces in each bank when local numbering is enabled. |
 | `maxIcons` | `0` | Cap icons per workspace, collapsing the rest to `+N`. `0` means no cap. |
 | `maxWorkspaceId` | `10` | Highest workspace id to consider. |
 
@@ -54,6 +56,22 @@ Example — cap icons at four and keep empty workspaces visible:
 omarchy bar set io.github.thetrueferret.decent-workspaces maxIcons 4 --json
 omarchy bar set io.github.thetrueferret.decent-workspaces showEmpty true --json
 ```
+
+### Local numbers per monitor
+
+Hyprland workspace IDs are global. If your monitor setup assigns fixed banks
+such as `1-10`, `11-20`, and `21-30`, the widget can present every bank as
+local numbers `1-10`:
+
+```bash
+omarchy bar set io.github.thetrueferret.decent-workspaces localWorkspaceNumbers true --json
+omarchy bar set io.github.thetrueferret.decent-workspaces workspacesPerMonitor 10 --json
+omarchy bar set io.github.thetrueferret.decent-workspaces maxWorkspaceId 20 --json
+```
+
+This changes labels only. Pin the underlying workspace banks to their monitors
+in your Hyprland configuration. With `perMonitor: true`, scrolling stays on the
+focused monitor; scrolling a bar on another monitor does nothing.
 
 ## Adding an app icon
 
