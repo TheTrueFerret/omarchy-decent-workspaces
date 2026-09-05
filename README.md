@@ -3,7 +3,7 @@ I actually created this manually for waybar in the past... ain't doing that agai
 
 # Decent Workspaces
 
-![Workspace 1 active with a browser icon, workspace 4 with browser, files and terminal icons](preview.png)
+![Three bars stacked: the default showing only workspaces 1, 3, 4, 5 and 8 with app icons plus a scratchpad pill; the same bar with showEmpty filling in every number to 10; and again with maxIcons collapsing extra windows into +N](preview.png)
 
 A bar widget for Omarchy Quattro that shows workspaces the way you actually use
 them:
