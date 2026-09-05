@@ -387,16 +387,6 @@ BarWidget {
     root.bar.run("hyprctl dispatch " + Util.shellQuote('hl.dsp.focus({ workspace = "' + id + '" })'))
   }
 
-  function switchWorkspace(delta) {
-    // With per-monitor bars the dispatch still lands on the focused monitor,
-    // so scrolling a bar that is not focused would move workspaces somewhere
-    // the pointer is not.
-    if (!root.bar || (root.perMonitor && !root.monitorFocused)) return
-    var prefix = root.perMonitor ? "m" : "e"
-    var target = prefix + (delta > 0 ? "+1" : "-1")
-    root.bar.run("hyprctl dispatch " + Util.shellQuote('hl.dsp.focus({ workspace = "' + target + '" })'))
-  }
-
   // --- layout --------------------------------------------------------------
   implicitWidth: root.vertical ? root.barSize : strip.implicitWidth + root.trailingGap
   implicitHeight: strip.implicitHeight
@@ -411,14 +401,6 @@ BarWidget {
     anchors.bottomMargin: root.vertical ? 0 : Style.spaceReal(4)
     implicitWidth: grid.implicitWidth + Style.spaceReal(8)
     implicitHeight: grid.implicitHeight + Style.spaceReal(8)
-
-    MouseArea {
-      anchors.fill: parent
-      acceptedButtons: Qt.NoButton
-      onWheel: function(wheel) {
-        root.switchWorkspace(wheel.angleDelta.y > 0 ? 1 : -1)
-      }
-    }
 
     GridLayout {
       id: grid
