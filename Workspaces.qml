@@ -7,9 +7,15 @@ import qs.Commons
 import qs.Ui
 import "IconRules.js" as IconRules
 
-// Workspace indicators filtered to the monitor this bar instance lives on,
-// labelled with a number plus an icon per open window. Empty unused IDs are
-// omitted unless showEmpty is set, in which case they are synthesised.
+// Workspace indicators that show only what is actually there: workspaces with
+// windows on them, filtered to the monitor this bar instance lives on, each
+// labelled with its number plus an icon per open window.
+//
+// Everything past that default is opt-in: `showEmpty` keeps every workspace
+// number on the bar whether or not it holds windows, `localWorkspaceNumbers`
+// relabels per-monitor banks so each bar counts from 1, and `showScratchpad`
+// adds a pill for Hyprland's special:scratchpad while something is parked in
+// it.
 BarWidget {
   id: root
   moduleName: "io.github.thetrueferret.decent-workspaces"
@@ -18,11 +24,18 @@ BarWidget {
   readonly property bool perMonitor: root.setting("perMonitor", true)
   readonly property bool showEmpty: root.setting("showEmpty", false)
   readonly property bool showIcons: root.setting("showIcons", true)
-  readonly property bool localWorkspaceNumbers: root.setting("localWorkspaceNumbers", false)
-  readonly property int workspacesPerMonitor: Math.max(1, root.setting("workspacesPerMonitor", 10))
   // 0 = show an icon for every window; otherwise overflow collapses to "+N".
   readonly property int maxIcons: root.setting("maxIcons", 0)
   readonly property int maxWorkspaceId: root.setting("maxWorkspaceId", 10)
+  // Label each monitor's bank as 1..workspacesPerMonitor instead of using the
+  // global Hyprland id. Display only; ids and dispatches stay global.
+  readonly property bool localWorkspaceNumbers: root.setting("localWorkspaceNumbers", false)
+  readonly property int workspacesPerMonitor: Math.max(1, root.setting("workspacesPerMonitor", 10))
+  // The scratchpad pill appears only while the special workspace holds
+  // windows, so it costs nothing on a bar that never uses it.
+  readonly property bool showScratchpad: root.setting("showScratchpad", true)
+  readonly property string scratchpadName: root.setting("scratchpadName", "special:scratchpad")
+  readonly property string scratchpadLabel: root.setting("scratchpadLabel", "S")
 
   readonly property color fgColor: root.bar ? root.bar.barForeground : Color.foreground
   readonly property color bgColor: root.bar ? root.bar.background : Color.background
@@ -69,6 +82,9 @@ BarWidget {
 
   readonly property var windowEvents: ["openwindow", "closewindow", "movewindow", "movewindowv2", "windowtitle", "windowtitlev2", "activewindow", "activewindowv2", "urgent"]
   readonly property var workspaceEvents: ["workspace", "workspacev2", "createworkspace", "createworkspacev2", "destroyworkspace", "destroyworkspacev2", "moveworkspace", "moveworkspacev2", "focusedmon", "configreloaded"]
+  // Toggling the scratchpad open or shut changes which monitor is showing it,
+  // which only the monitors payload carries.
+  readonly property var specialEvents: ["activespecial", "activespecialv2"]
 
   Connections {
     target: Hyprland
@@ -79,17 +95,17 @@ BarWidget {
         root.revision++
       } else if (root.workspaceEvents.indexOf(name) !== -1) {
         Hyprland.refreshWorkspaces()
-        if (name === "configreloaded") root.refreshRules()
+        if (name === "configreloaded" && root.rulesNeeded) root.refreshRules()
+        root.revision++
+      } else if (root.specialEvents.indexOf(name) !== -1) {
+        Hyprland.refreshWorkspaces()
+        Hyprland.refreshMonitors()
         root.revision++
       }
     }
   }
 
   // --- model ---------------------------------------------------------------
-  // Hyprland only reports workspaces that currently exist. Empty unused IDs
-  // are missing from that list, so showEmpty has to synthesise them rather
-  // than filter live objects. The Repeater therefore iterates IDs; a missing
-  // workspace looks up as null and is still a valid empty pill.
   function hasWindows(workspace) {
     if (!workspace) return false
     var tops = workspace.toplevels ? workspace.toplevels.values : null
@@ -115,17 +131,16 @@ BarWidget {
     return null
   }
 
-  function focusWorkspace(id) {
-    if (!root.bar) return
-    root.bar.run("hyprctl dispatch " + Util.shellQuote('hl.dsp.focus({ workspace = "' + id + '" })'))
-  }
-
-  // Empty IDs are attributed from Hyprland workspace rules when those exist,
-  // so sequential (1-5 / 6-10) and interleaved (odds / evens) layouts both
-  // work. Live occupancy still wins if a workspace has already been created.
+  // --- workspace rules, only needed to place empty numbers -----------------
+  // Hyprland only reports workspaces that currently exist, so `showEmpty` has
+  // to synthesise the missing ids rather than filter live objects — and then
+  // decide which bar each synthesised id belongs on. Rules answer that for
+  // both sequential (1-5 / 6-10) and interleaved (odds / evens) layouts; live
+  // occupancy still wins wherever a workspace has already been created.
   property var workspaceRules: []
   property bool rulesPending: false
   property bool rulesLoaded: false
+  readonly property bool rulesNeeded: root.showEmpty && root.perMonitor
 
   function refreshRules() {
     if (rulesProc.running) {
@@ -134,6 +149,9 @@ BarWidget {
     }
     rulesProc.running = true
   }
+
+  onRulesNeededChanged: if (root.rulesNeeded && !root.rulesLoaded) root.refreshRules()
+  Component.onCompleted: if (root.rulesNeeded) root.refreshRules()
 
   function ruleMonitorMatches(spec, mine, mineDesc) {
     if (!spec) return false
@@ -173,81 +191,9 @@ BarWidget {
     return map
   }
 
-  function workspaceIds() {
-    var _ = root.revision
-    var __ = root.workspaceRules
-    var ___ = root.rulesLoaded
-    var mine = root.screenName
-    var active = root.activeId
-    var maxId = root.maxWorkspaceId
-    var values = Hyprland.workspaces.values
-    var mineIds = []
-    var owners = {}
-    var known = []
-
-    for (var i = 0; i < values.length; i++) {
-      var workspace = values[i]
-      var id = workspace.id
-      if (id <= 0 || id > maxId) continue
-      var owner = root.monitorNameOf(workspace)
-      if (owner !== "") {
-        owners[id] = owner
-        known.push(id)
-      }
-      if (root.perMonitor && mine !== "" && owner !== "" && owner !== mine) continue
-      mineIds.push(id)
-    }
-    known.sort(function(left, right) { return left - right })
-
-    if (!root.showEmpty) {
-      var occupied = []
-      for (var i = 0; i < mineIds.length; i++) {
-        var id = mineIds[i]
-        if (id !== active && !root.hasWindows(root.workspaceById(id))) continue
-        occupied.push(id)
-      }
-      occupied.sort(function(left, right) { return left - right })
-      return occupied
-    }
-
-    if (!root.perMonitor) {
-      var all = []
-      for (var n = 1; n <= maxId; n++) all.push(n)
-      return all
-    }
-
-    if (mine === "") return []
-
-    // Live-only until the first workspacerules read; [] means "not loaded"
-    // and "no rules" otherwise, and fallback would flash the wrong layout.
-    if (!root.rulesLoaded) {
-      var pending = mineIds.slice()
-      if (active > 0 && active <= maxId && pending.indexOf(active) === -1) {
-        if (owners[active] === undefined || owners[active] === mine) pending.push(active)
-      }
-      pending.sort(function(left, right) { return left - right })
-      return pending
-    }
-
-    var ruleOwners = root.ruleOwnerById(maxId)
-    var firstOwner = known.length > 0 ? owners[known[0]] : ""
-    var pred = 0
-    var filled = []
-    for (var n = 1; n <= maxId; n++) {
-      if (owners[n]) pred = n
-      var owner = owners[n] || ruleOwners[n] || (pred > 0 ? owners[pred] : firstOwner)
-      if (owner === mine) filled.push(n)
-    }
-    if (filled.length === 0 && active > 0 && active <= maxId && (owners[active] === undefined || owners[active] === mine)) {
-      return [active]
-    }
-    return filled
-  }
-
   Process {
     id: rulesProc
     command: ["hyprctl", "-j", "workspacerules"]
-    running: true
     onRunningChanged: {
       if (!running && root.rulesPending) {
         root.rulesPending = false
@@ -278,6 +224,116 @@ BarWidget {
       }
     }
   }
+
+  // The pills, as ids. Ids rather than workspace objects, because a
+  // synthesised empty number has no object behind it until it is focused.
+  readonly property var visibleIds: {
+    var _ = root.revision
+    var __ = root.workspaceRules
+    var ___ = root.rulesLoaded
+    var mine = root.screenName
+    var active = root.activeId
+    var maxId = root.maxWorkspaceId
+    var values = Hyprland.workspaces.values
+
+    var mineIds = []
+    var occupied = []
+    var owners = {}
+    var known = []
+
+    for (var i = 0; i < values.length; i++) {
+      var workspace = values[i]
+      var id = workspace.id
+      if (id <= 0 || id > maxId) continue
+
+      var owner = root.monitorNameOf(workspace)
+      if (owner !== "") {
+        owners[id] = owner
+        known.push(id)
+      }
+
+      // An unknown owner is kept rather than dropped: better a stray pill
+      // than a workspace that silently vanishes from every bar.
+      if (root.perMonitor && mine !== "" && owner !== "" && owner !== mine) continue
+      mineIds.push(id)
+
+      // The active workspace stays pinned even when empty, otherwise stepping
+      // onto a fresh workspace leaves the bar with nothing to point at.
+      if (root.hasWindows(workspace) || id === active) occupied.push(id)
+    }
+    known.sort(function(left, right) { return left - right })
+
+    if (!root.showEmpty) {
+      occupied.sort(function(left, right) { return left - right })
+      return occupied
+    }
+
+    if (!root.perMonitor) {
+      var all = []
+      for (var n = 1; n <= maxId; n++) all.push(n)
+      return all
+    }
+
+    if (mine === "") return []
+
+    // Live-only until the first workspacerules read; [] means "not loaded"
+    // and "no rules" otherwise, and fallback would flash the wrong layout.
+    if (!root.rulesLoaded) {
+      var pending = mineIds.slice()
+      if (active > 0 && active <= maxId && pending.indexOf(active) === -1) {
+        if (owners[active] === undefined || owners[active] === mine) pending.push(active)
+      }
+      pending.sort(function(left, right) { return left - right })
+      return pending
+    }
+
+    var ruleOwners = root.ruleOwnerById(maxId)
+    var firstOwner = known.length > 0 ? owners[known[0]] : ""
+    var pred = 0
+    var filled = []
+    for (var id2 = 1; id2 <= maxId; id2++) {
+      if (owners[id2]) pred = id2
+      var owner2 = owners[id2] || ruleOwners[id2] || (pred > 0 ? owners[pred] : firstOwner)
+      if (owner2 === mine) filled.push(id2)
+    }
+    if (filled.length === 0 && active > 0 && active <= maxId && (owners[active] === undefined || owners[active] === mine)) {
+      return [active]
+    }
+    return filled
+  }
+
+  // --- scratchpad -----------------------------------------------------------
+  // Hyprland keeps special:scratchpad in the workspace list for as long as it
+  // holds windows, whether or not it is currently toggled open. It belongs to
+  // no monitor in any lasting sense, so the pill shows up on every bar.
+  readonly property var scratchpadWorkspace: {
+    var _ = root.revision
+    if (!root.showScratchpad) return null
+    var values = Hyprland.workspaces.values
+    for (var i = 0; i < values.length; i++) {
+      if (String(values[i].name || "") === root.scratchpadName) return values[i]
+    }
+    return null
+  }
+
+  readonly property bool scratchpadVisible: root.showScratchpad && root.hasWindows(root.scratchpadWorkspace)
+
+  // Open on *this* monitor, which is the only place the stash is reachable
+  // from right now.
+  readonly property bool scratchpadOpen: {
+    var _ = root.revision
+    if (!root.hyprMonitor) return false
+    var ipc = root.hyprMonitor.lastIpcObject
+    var special = ipc ? ipc.specialWorkspace : null
+    return !!special && String(special.name || "") === root.scratchpadName
+  }
+
+  function toggleScratchpad() {
+    if (!root.bar) return
+    var name = root.scratchpadName.indexOf("special:") === 0 ? root.scratchpadName.slice(8) : root.scratchpadName
+    root.bar.run("hyprctl dispatch " + Util.shellQuote('hl.dsp.workspace.toggle_special("' + name + '")'))
+  }
+
   // --- icons ---------------------------------------------------------------
   function windowClass(toplevel) {
     var ipc = toplevel ? toplevel.lastIpcObject : null
@@ -313,11 +369,28 @@ BarWidget {
     return icons.join(" ")
   }
 
+  // Global ids are what Hyprland dispatches on; the label is the only thing
+  // local numbering touches.
   function displayWorkspaceId(id) {
     return root.localWorkspaceNumbers ? ((id - 1) % root.workspacesPerMonitor) + 1 : id
   }
 
+  function focusWorkspace(id) {
+    var workspace = root.workspaceById(id)
+    if (workspace) {
+      workspace.activate()
+      return
+    }
+    // A synthesised empty number has nothing to activate, so it goes out as a
+    // dispatch, which creates the workspace the same way a keybind would.
+    if (!root.bar) return
+    root.bar.run("hyprctl dispatch " + Util.shellQuote('hl.dsp.focus({ workspace = "' + id + '" })'))
+  }
+
   function switchWorkspace(delta) {
+    // With per-monitor bars the dispatch still lands on the focused monitor,
+    // so scrolling a bar that is not focused would move workspaces somewhere
+    // the pointer is not.
     if (!root.bar || (root.perMonitor && !root.monitorFocused)) return
     var prefix = root.perMonitor ? "m" : "e"
     var target = prefix + (delta > 0 ? "+1" : "-1")
@@ -354,12 +427,12 @@ BarWidget {
       anchors.right: parent.right
       anchors.rightMargin: Style.spaceReal(4)
       anchors.verticalCenter: parent.verticalCenter
-      columns: root.vertical ? 1 : Math.max(1, root.workspaceIds().length)
+      columns: root.vertical ? 1 : Math.max(1, root.visibleIds.length + (root.scratchpadVisible ? 1 : 0))
       columnSpacing: root.vertical ? 0 : Style.spaceReal(4)
       rowSpacing: root.vertical ? Style.spaceReal(4) : 0
 
       Repeater {
-        model: root.workspaceIds()
+        model: root.visibleIds
 
         Rectangle {
           id: pill
@@ -414,6 +487,60 @@ BarWidget {
             onExited: pill.hovered = false
             onClicked: root.focusWorkspace(pill.workspaceId)
           }
+        }
+      }
+
+      // The scratchpad sits after the numbers, as the place windows go when
+      // they are not on any of them.
+      Rectangle {
+        id: scratchpad
+        visible: root.scratchpadVisible
+        property bool hovered: false
+
+        radius: Style.spaceReal(8)
+        color: scratchpad.hovered ? Util.alpha(root.fgColor, 0.15)
+          : root.scratchpadOpen ? Util.alpha(root.fgColor, root.monitorFocused ? 0.22 : 0.10)
+          : "transparent"
+        opacity: root.scratchpadOpen ? 1 : 0.7
+
+        Layout.alignment: Qt.AlignVCenter
+        Layout.fillHeight: true
+        Layout.fillWidth: root.vertical
+        implicitWidth: !scratchpad.visible ? 0
+          : root.vertical ? (root.barSize - Style.spaceReal(8))
+          : scratchpadContent.implicitWidth + Style.spaceReal(16)
+        implicitHeight: root.vertical ? scratchpadContent.implicitHeight + Style.spaceReal(10) : root.barSize - Style.spaceReal(8)
+
+        Row {
+          id: scratchpadContent
+          anchors.centerIn: parent
+          clip: true
+          spacing: Style.spaceReal(3)
+
+          Text {
+            text: root.scratchpadLabel
+            visible: text !== ""
+            color: root.fgColor
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: root.vertical ? Style.font.icon : Style.font.body
+          }
+
+          Text {
+            text: root.iconsFor(root.scratchpadWorkspace)
+            visible: text !== ""
+            color: root.fgColor
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: root.vertical ? Style.font.icon : Style.font.body
+          }
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          hoverEnabled: true
+          cursorShape: Qt.PointingHandCursor
+          onEntered: scratchpad.hovered = true
+          onExited: scratchpad.hovered = false
+          onClicked: root.toggleScratchpad()
         }
       }
     }
