@@ -19,8 +19,7 @@ them:
   `SUPER + ALT + S` get their own pill instead of vanishing until you toggle
   the stash open.
 
-Click a workspace to focus it; scroll anywhere over the widget to step through
-workspaces.
+Click a workspace to focus it.
 
 ## Install
 
@@ -83,9 +82,7 @@ omarchy bar set io.github.thetrueferret.decent-workspaces workspacesPerMonitor 1
 omarchy bar set io.github.thetrueferret.decent-workspaces maxWorkspaceId 20 --json
 ```
 
-Labels only — pinning the banks stays your Hyprland config's job. With
-`perMonitor: true` scrolling steps through the focused monitor's workspaces, and
-scrolling a bar on another monitor does nothing.
+Labels only — pinning the banks stays your Hyprland config's job.
 
 ### The scratchpad
 
