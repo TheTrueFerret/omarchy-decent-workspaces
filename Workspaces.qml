@@ -18,6 +18,8 @@ BarWidget {
   readonly property bool perMonitor: root.setting("perMonitor", true)
   readonly property bool showEmpty: root.setting("showEmpty", false)
   readonly property bool showIcons: root.setting("showIcons", true)
+  readonly property bool localWorkspaceNumbers: root.setting("localWorkspaceNumbers", false)
+  readonly property int workspacesPerMonitor: Math.max(1, root.setting("workspacesPerMonitor", 10))
   // 0 = show an icon for every window; otherwise overflow collapses to "+N".
   readonly property int maxIcons: root.setting("maxIcons", 0)
   readonly property int maxWorkspaceId: root.setting("maxWorkspaceId", 10)
@@ -311,9 +313,14 @@ BarWidget {
     return icons.join(" ")
   }
 
+  function displayWorkspaceId(id) {
+    return root.localWorkspaceNumbers ? ((id - 1) % root.workspacesPerMonitor) + 1 : id
+  }
+
   function switchWorkspace(delta) {
-    if (!root.bar) return
-    var target = delta > 0 ? "e+" + delta : "e" + delta
+    if (!root.bar || (root.perMonitor && !root.monitorFocused)) return
+    var prefix = root.perMonitor ? "m" : "e"
+    var target = prefix + (delta > 0 ? "+1" : "-1")
     root.bar.run("hyprctl dispatch " + Util.shellQuote('hl.dsp.focus({ workspace = "' + target + '" })'))
   }
 
@@ -384,7 +391,7 @@ BarWidget {
             spacing: Style.spaceReal(3)
 
             Text {
-              text: String(pill.workspaceId)
+              text: String(root.displayWorkspaceId(pill.workspaceId))
               color: pill.urgent ? root.bgColor : root.fgColor
               font.family: root.bar ? root.bar.fontFamily : Style.font.family
               font.pixelSize: root.vertical ? Style.font.icon : Style.font.body
