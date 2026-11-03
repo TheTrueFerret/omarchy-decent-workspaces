@@ -131,8 +131,9 @@ The icon map is adapted from the `saif.workspaces` plugin by Saif Omar (MIT).
 
 `showEmpty` was fixed by [@roddutra](https://github.com/roddutra) (#2), local
 workspace numbering added by [@jorgeccastro](https://github.com/jorgeccastro)
-(#3), and the scratchpad pill suggested by
-[@sirfrank0](https://github.com/sirfrank0) (#4).
+(#3), the scratchpad pill suggested by
+[@sirfrank0](https://github.com/sirfrank0) (#4), and icon grouping added by
+[@batuhanmeral](https://github.com/batuhanmeral) (#9).
 
 ## License
 

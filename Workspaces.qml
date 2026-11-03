@@ -387,6 +387,8 @@ BarWidget {
       counts[icon]++
     }
 
+    // The count sits after an en space: Nerd Font glyphs draw wider than their
+    // advance, so a bare "×" overlaps them, and a full space splits it off.
     var shown = root.maxIcons > 0 ? Math.min(order.length, root.maxIcons) : order.length
     var icons = []
     var hidden = 0
