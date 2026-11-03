@@ -120,7 +120,6 @@ Run the client-model regression tests with Node.js (no QML runtime required):
 node --test tests/clients.test.cjs
 ```
 
-
 Editing a bar widget needs a shell restart — the "local plugin changed,
 reloading" hot reload does not rebuild bar surfaces:
 
@@ -139,6 +138,9 @@ The icon map is adapted from the `saif.workspaces` plugin by Saif Omar (MIT).
 workspace numbering added by [@jorgeccastro](https://github.com/jorgeccastro)
 (#3), and the scratchpad pill suggested by
 [@sirfrank0](https://github.com/sirfrank0) (#4).
+
+Stale workspace icons were fixed by
+[@sametgultekin](https://github.com/sametgultekin) (#10).
 
 ## License
 

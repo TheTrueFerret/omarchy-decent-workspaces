@@ -20,7 +20,7 @@ function helper(name) {
   return source.slice(start, end);
 }
 function model() {
-  const root = { liveClients: [], showIcons: true, maxIcons: 0, iconFor: c => c.class };
+  const root = { liveClients: [], clientsLoaded: true, showIcons: true, maxIcons: 0, iconFor: c => c.class };
   const context = vm.createContext({ root });
   for (const name of ['clientsFor', 'hasWindows', 'iconsFor']) {
     vm.runInContext(helper(name), context);
@@ -78,6 +78,15 @@ test('icon limits and disabled icons retain their behavior', () => {
   assert.equal(root.hasWindows({ id: 1 }), true);
 });
 
+test('workspace.toplevels stands in until the first snapshot', () => {
+  const root = model();
+  root.clientsLoaded = false;
+  const workspace = { id: 1, toplevels: { values: [{ class: 'chat' }] } };
+  assert.equal(root.iconsFor(workspace), 'chat');
+  assert.equal(root.hasWindows({ id: 2 }), false);
+  root.clientsLoaded = true;
+  assert.equal(root.iconsFor(workspace), '');
+});
 
 test('hidden group tabs keep their icons and occupancy', () => {
   const root = model();
@@ -99,7 +108,8 @@ test('events during a running query schedule one follow-up', () => {
   assert.equal(root.clientsPending, true);
   assert.equal(starts, 0);
   clientsProc.running = false;
-  const handler = source.match(/onRunningChanged: \{([\s\S]*?)\n    \}/)[1];
+  const proc = source.slice(source.indexOf('id: clientsProc'));
+  const handler = proc.match(/onRunningChanged: \{([\s\S]*?)\n    \}/)[1];
   context.running = false;
   vm.runInContext(handler, context);
   assert.equal(root.clientsPending, false);

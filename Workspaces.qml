@@ -114,6 +114,9 @@ BarWidget {
   // entries can outlive closed windows. Keep the last good snapshot on errors.
   property var liveClients: []
   property bool clientsPending: false
+  // Until the first snapshot lands, Quickshell's own lists stand in, so the
+  // bar does not start out blank. Fresh at startup, so not yet stale.
+  property bool clientsLoaded: false
 
   function refreshClients() {
     if (clientsProc.running) {
@@ -125,6 +128,7 @@ BarWidget {
 
   function clientsFor(workspace) {
     if (!workspace) return []
+    if (!root.clientsLoaded) return workspace.toplevels ? workspace.toplevels.values : []
     // Hidden group tabs are still open windows and retain their icons.
     return root.liveClients.filter(function(client) {
       return client && client.workspace && client.workspace.id === workspace.id &&
@@ -163,6 +167,7 @@ BarWidget {
         }
         if (!Array.isArray(listed)) return
         root.liveClients = listed
+        root.clientsLoaded = true
       }
     }
   }
