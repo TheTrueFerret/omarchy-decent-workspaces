@@ -26,11 +26,18 @@ BarWidget {
   readonly property bool showIcons: root.setting("showIcons", true)
   // 0 = show an icon for every window; otherwise overflow collapses to "+N".
   readonly property int maxIcons: root.setting("maxIcons", 0)
+  // How far `showEmpty` fills in numbers. Never hides a workspace that has
+  // windows on it, whatever its id.
   readonly property int maxWorkspaceId: root.setting("maxWorkspaceId", 10)
   // Label each monitor's bank as 1..workspacesPerMonitor instead of using the
   // global Hyprland id. Display only; ids and dispatches stay global.
   readonly property bool localWorkspaceNumbers: root.setting("localWorkspaceNumbers", false)
   readonly property int workspacesPerMonitor: Math.max(1, root.setting("workspacesPerMonitor", 10))
+  // Workspace ids are global by default. Turn this on to follow Omarchy's
+  // per-monitor blocks instead (1-10 on the first monitor, 11-20 on the
+  // next, ...): `showEmpty` fills each bar with its own monitor's block and
+  // clicking an empty number creates it on that monitor.
+  readonly property bool omarchyMonitorBlocks: root.setting("omarchyMonitorBlocks", false)
   // The scratchpad pill appears only while the special workspace holds
   // windows, so it costs nothing on a bar that never uses it.
   readonly property bool showScratchpad: root.setting("showScratchpad", true)
@@ -71,6 +78,69 @@ BarWidget {
     var _ = root.revision
     if (root.screenName === "" || !Hyprland.focusedMonitor) return true
     return String(Hyprland.focusedMonitor.name) === root.screenName
+  }
+
+  // --- Omarchy's per-monitor blocks (opt-in) -------------------------------
+  // Omarchy can give every monitor its own block of ten global ids (1-10,
+  // 11-20, 21-30, ...), recording which connector owns which block in a state
+  // file (default/hypr/monitor-workspaces.lua). Only `omarchyMonitorBlocks`
+  // uses it: then the id range stretches to cover every block, and an empty
+  // number belongs to the monitor whose block it falls in. With it off the
+  // file is ignored and ids are plain global numbers.
+  readonly property int blockSize: 10
+  property var blockByMonitor: ({})
+  property int highestBlock: -1
+
+  function readBlocks(text) {
+    var next = {}
+    var highest = -1
+    var lines = String(text || "").split("\n")
+    for (var i = 0; i < lines.length; i++) {
+      var fields = lines[i].split("\t")
+      if (fields.length < 3) continue
+      var block = parseInt(fields[0], 10)
+      if (!(block >= 0)) continue
+      if (block > highest) highest = block
+      if (fields[1] !== "") next[fields[1]] = block
+    }
+    root.blockByMonitor = next
+    root.highestBlock = highest
+  }
+
+  FileView {
+    path: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/omarchy/monitor-workspaces"
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: root.readBlocks(text())
+    onLoadFailed: root.readBlocks("")
+  }
+
+  // With blocks on, the range never cuts a monitor's block in half: the
+  // default of 10 would otherwise fill in numbers on the first monitor only.
+  readonly property int effectiveMaxId: root.omarchyMonitorBlocks
+    ? Math.max(root.maxWorkspaceId, (root.highestBlock + 1) * root.blockSize)
+    : root.maxWorkspaceId
+
+  // This bar's own block, or -1 when blocks are off or unassigned.
+  readonly property int ownBlock: {
+    if (!root.omarchyMonitorBlocks) return -1
+    var block = root.blockByMonitor[root.screenName]
+    return block === undefined ? -1 : block
+  }
+
+  function blockOf(id) {
+    return Math.floor((id - 1) / root.blockSize)
+  }
+
+  function blockOwnerOf(id) {
+    if (!root.omarchyMonitorBlocks) return ""
+    var blocks = root.blockByMonitor
+    var block = root.blockOf(id)
+    for (var name in blocks) {
+      if (blocks[name] === block) return name
+    }
+    return ""
   }
 
   // --- keeping Hyprland's view fresh ---------------------------------------
@@ -225,15 +295,27 @@ BarWidget {
     }
   }
 
+  // Numeric order, except that with Omarchy blocks on a workspace visiting from
+  // another monitor's block goes after this monitor's own, as on the stock bar.
+  function compareIds(left, right) {
+    if (root.perMonitor && root.ownBlock >= 0) {
+      var leftGuest = root.blockOf(left) !== root.ownBlock ? 1 : 0
+      var rightGuest = root.blockOf(right) !== root.ownBlock ? 1 : 0
+      if (leftGuest !== rightGuest) return leftGuest - rightGuest
+    }
+    return left - right
+  }
+
   // The pills, as ids. Ids rather than workspace objects, because a
   // synthesised empty number has no object behind it until it is focused.
   readonly property var visibleIds: {
     var _ = root.revision
     var __ = root.workspaceRules
     var ___ = root.rulesLoaded
+    var ____ = root.blockByMonitor
     var mine = root.screenName
     var active = root.activeId
-    var maxId = root.maxWorkspaceId
+    var maxId = root.effectiveMaxId
     var values = Hyprland.workspaces.values
 
     var mineIds = []
@@ -241,13 +323,16 @@ BarWidget {
     var owners = {}
     var known = []
 
+    // Every id is considered here, however high: a workspace with windows on
+    // it always gets a pill, whatever numbering the compositor uses.
+    // `maxWorkspaceId` only bounds which empty numbers get filled in.
     for (var i = 0; i < values.length; i++) {
       var workspace = values[i]
       var id = workspace.id
-      if (id <= 0 || id > maxId) continue
+      if (id <= 0) continue
 
       var owner = root.monitorNameOf(workspace)
-      if (owner !== "") {
+      if (owner !== "" && id <= maxId) {
         owners[id] = owner
         known.push(id)
       }
@@ -255,7 +340,7 @@ BarWidget {
       // An unknown owner is kept rather than dropped: better a stray pill
       // than a workspace that silently vanishes from every bar.
       if (root.perMonitor && mine !== "" && owner !== "" && owner !== mine) continue
-      mineIds.push(id)
+      if (id <= maxId) mineIds.push(id)
 
       // The active workspace stays pinned even when empty, otherwise stepping
       // onto a fresh workspace leaves the bar with nothing to point at.
@@ -263,18 +348,24 @@ BarWidget {
     }
     known.sort(function(left, right) { return left - right })
 
-    if (!root.showEmpty) {
-      occupied.sort(function(left, right) { return left - right })
-      return occupied
+    // Filled-in lists stop at maxId; live workspaces past it still show.
+    function withLive(ids) {
+      for (var k = 0; k < occupied.length; k++) {
+        if (ids.indexOf(occupied[k]) === -1) ids.push(occupied[k])
+      }
+      ids.sort(root.compareIds)
+      return ids
     }
+
+    if (!root.showEmpty) return withLive([])
 
     if (!root.perMonitor) {
       var all = []
       for (var n = 1; n <= maxId; n++) all.push(n)
-      return all
+      return withLive(all)
     }
 
-    if (mine === "") return []
+    if (mine === "") return withLive([])
 
     // Live-only until the first workspacerules read; [] means "not loaded"
     // and "no rules" otherwise, and fallback would flash the wrong layout.
@@ -283,8 +374,7 @@ BarWidget {
       if (active > 0 && active <= maxId && pending.indexOf(active) === -1) {
         if (owners[active] === undefined || owners[active] === mine) pending.push(active)
       }
-      pending.sort(function(left, right) { return left - right })
-      return pending
+      return withLive(pending)
     }
 
     var ruleOwners = root.ruleOwnerById(maxId)
@@ -293,13 +383,16 @@ BarWidget {
     var filled = []
     for (var id2 = 1; id2 <= maxId; id2++) {
       if (owners[id2]) pred = id2
-      var owner2 = owners[id2] || ruleOwners[id2] || (pred > 0 ? owners[pred] : firstOwner)
+      // A workspace rule that pins the id wins, then Omarchy's per-monitor
+      // block (setups that keep global ids can switch Omarchy's renumbering
+      // off and pin with rules instead).
+      var owner2 = owners[id2] || ruleOwners[id2] || root.blockOwnerOf(id2) || (pred > 0 ? owners[pred] : firstOwner)
       if (owner2 === mine) filled.push(id2)
     }
     if (filled.length === 0 && active > 0 && active <= maxId && (owners[active] === undefined || owners[active] === mine)) {
-      return [active]
+      filled.push(active)
     }
-    return filled
+    return withLive(filled)
   }
 
   // --- scratchpad -----------------------------------------------------------
@@ -384,6 +477,13 @@ BarWidget {
     // A synthesised empty number has nothing to activate, so it goes out as a
     // dispatch, which creates the workspace the same way a keybind would.
     if (!root.bar) return
+    // Within this monitor's Omarchy block, go through Omarchy's own focus so
+    // the workspace is created on this monitor rather than the focused one.
+    if (root.ownBlock >= 0 && root.blockOf(id) === root.ownBlock) {
+      var slot = (id - 1) % root.blockSize + 1
+      root.bar.run("hyprctl dispatch " + Util.shellQuote('o.workspaces.focus(' + slot + ', "' + root.screenName + '")'))
+      return
+    }
     root.bar.run("hyprctl dispatch " + Util.shellQuote('hl.dsp.focus({ workspace = "' + id + '" })'))
   }
 

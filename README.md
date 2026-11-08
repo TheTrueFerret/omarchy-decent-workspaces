@@ -46,9 +46,10 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
 | `showEmpty` | `false` | Keep every workspace number on the bar up to `maxWorkspaceId`, occupied or not. Set `true` for stock-like behaviour. |
 | `showIcons` | `true` | Draw an app icon per open window. |
 | `maxIcons` | `0` | Cap icons per workspace, collapsing the rest to `+N`. `0` means no cap. |
-| `maxWorkspaceId` | `10` | Highest workspace id to consider. |
+| `maxWorkspaceId` | `10` | How far `showEmpty` fills in numbers. A workspace with windows on it always shows, whatever its id. |
 | `localWorkspaceNumbers` | `false` | Label each monitor's bank from 1 instead of using the global Hyprland id. |
 | `workspacesPerMonitor` | `10` | Size of a bank when local numbering is on. |
+| `omarchyMonitorBlocks` | `false` | Follow Omarchy's per-monitor workspace blocks instead of plain global ids. See below. |
 | `showScratchpad` | `true` | Show a pill for the scratchpad while it holds windows. |
 | `scratchpadName` | `special:scratchpad` | Which special workspace that pill tracks. |
 | `scratchpadLabel` | `S` | Text on the scratchpad pill. Set `""` for icons only. |
@@ -70,6 +71,32 @@ in order: where that workspace lives right now, what your Hyprland workspace
 rules say, then the nearest live workspace below it — sequential banks (`1-5` /
 `6-10`) and interleaved ones (odds / evens) both work. Clicking an empty number
 creates it, the same as a keybind would.
+
+### Global ids, and Omarchy's per-monitor workspaces
+
+Workspace ids are global by default: each bar shows the workspaces that live on
+its monitor, under their real Hyprland id, wherever they came from. Nothing
+depends on how they are numbered, so a workspace with windows on it can't go
+missing from the bar.
+
+Omarchy can instead give each monitor its own block of ten ids (the first
+monitor 1-10, the next 11-20, and so on), renumbering workspaces into the block
+of the monitor they sit on. The default handles that too: the pills simply read
+`22`, `23`. To have the widget follow those blocks, so that `showEmpty` fills
+each bar with its own monitor's block and every bar counts from 1, turn on:
+
+```bash
+omarchy bar set io.github.thetrueferret.decent-workspaces omarchyMonitorBlocks true --json
+omarchy bar set io.github.thetrueferret.decent-workspaces localWorkspaceNumbers true --json
+```
+
+To keep global workspaces when Omarchy renumbers them, switch the renumbering
+off in `~/.config/hypr/hyprland.lua`, after `require("default.hypr.omarchy")`.
+It reaches into Omarchy's internals, so a later Omarchy update may change it:
+
+```lua
+o.workspaces.reconcile = function() end
+```
 
 ### Local numbers per monitor
 
