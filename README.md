@@ -46,6 +46,7 @@ Set these on the widget's entry in `~/.config/omarchy/shell.json`, or with
 | `showEmpty` | `false` | Keep every workspace number on the bar up to `maxWorkspaceId`, occupied or not. Set `true` for stock-like behaviour. |
 | `showIcons` | `true` | Draw an app icon per open window. |
 | `maxIcons` | `0` | Cap icons per workspace, collapsing the rest to `+N`. `0` means no cap. |
+| `groupIcons` | `false` | Show each icon once with a `×N` count, e.g. three terminals as `󰆍 ×3`. With `maxIcons` set, the cap applies to these groups. |
 | `maxWorkspaceId` | `10` | How far `showEmpty` fills in numbers. A workspace with windows on it always shows, whatever its id. |
 | `localWorkspaceNumbers` | `false` | Label each monitor's bank from 1 instead of using the global Hyprland id. |
 | `workspacesPerMonitor` | `10` | Size of a bank when local numbering is on. |
@@ -157,8 +158,9 @@ The icon map is adapted from the `saif.workspaces` plugin by Saif Omar (MIT).
 
 `showEmpty` was fixed by [@roddutra](https://github.com/roddutra) (#2), local
 workspace numbering added by [@jorgeccastro](https://github.com/jorgeccastro)
-(#3), and the scratchpad pill suggested by
-[@sirfrank0](https://github.com/sirfrank0) (#4).
+(#3), the scratchpad pill suggested by
+[@sirfrank0](https://github.com/sirfrank0) (#4), and icon grouping added by
+[@batuhanmeral](https://github.com/batuhanmeral) (#9).
 
 ## License
 

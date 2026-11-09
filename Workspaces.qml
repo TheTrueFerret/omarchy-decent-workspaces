@@ -26,6 +26,8 @@ BarWidget {
   readonly property bool showIcons: root.setting("showIcons", true)
   // 0 = show an icon for every window; otherwise overflow collapses to "+N".
   readonly property int maxIcons: root.setting("maxIcons", 0)
+  // Collapse windows sharing a glyph into one icon with a "×N" count.
+  readonly property bool groupIcons: root.setting("groupIcons", false)
   // How far `showEmpty` fills in numbers. Never hides a workspace that has
   // windows on it, whatever its id.
   readonly property int maxWorkspaceId: root.setting("maxWorkspaceId", 10)
@@ -455,10 +457,39 @@ BarWidget {
     var tops = workspace.toplevels ? workspace.toplevels.values : null
     if (!tops || tops.length === 0) return ""
 
+    if (root.groupIcons) return root.groupedIcons(tops)
+
     var shown = root.maxIcons > 0 ? Math.min(tops.length, root.maxIcons) : tops.length
     var icons = []
     for (var i = 0; i < shown; i++) icons.push(root.iconFor(tops[i]))
     if (tops.length > shown) icons.push("+" + (tops.length - shown))
+    return icons.join(" ")
+  }
+
+  // Grouped by glyph rather than class, so what looks the same on the bar is
+  // shown once. maxIcons caps groups; "+N" still counts the hidden windows.
+  function groupedIcons(tops) {
+    var order = []
+    var counts = {}
+    for (var i = 0; i < tops.length; i++) {
+      var icon = root.iconFor(tops[i])
+      if (counts[icon] === undefined) {
+        counts[icon] = 0
+        order.push(icon)
+      }
+      counts[icon]++
+    }
+
+    // The count sits after an en space: Nerd Font glyphs draw wider than their
+    // advance, so a bare "×" overlaps them, and a full space splits it off.
+    var shown = root.maxIcons > 0 ? Math.min(order.length, root.maxIcons) : order.length
+    var icons = []
+    var hidden = 0
+    for (var j = 0; j < order.length; j++) {
+      if (j < shown) icons.push(counts[order[j]] > 1 ? order[j] + "\u2002×" + counts[order[j]] : order[j])
+      else hidden += counts[order[j]]
+    }
+    if (hidden > 0) icons.push("+" + hidden)
     return icons.join(" ")
   }
 
