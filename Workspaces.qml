@@ -153,13 +153,15 @@ BarWidget {
   property int revision: 0
 
   readonly property var windowEvents: ["openwindow", "closewindow", "movewindow", "movewindowv2", "windowtitle", "windowtitlev2", "activewindow", "activewindowv2", "urgent"]
-  readonly property var workspaceEvents: ["workspace", "workspacev2", "createworkspace", "createworkspacev2", "destroyworkspace", "destroyworkspacev2", "moveworkspace", "moveworkspacev2", "focusedmon", "configreloaded"]
+  readonly property var workspaceEvents: ["workspace", "workspacev2", "createworkspace", "createworkspacev2", "destroyworkspace", "destroyworkspacev2", "moveworkspace", "moveworkspacev2", "changeworkspaceid", "focusedmon", "configreloaded"]
   // Toggling the scratchpad open or shut changes which monitor is showing it,
   // which only the monitors payload carries.
   readonly property var specialEvents: ["activespecial", "activespecialv2"]
 
   // Only changes that can affect the client icons require a new snapshot.
-  readonly property var clientEvents: ["openwindow", "closewindow", "movewindow", "movewindowv2", "windowtitle", "windowtitlev2", "configreloaded", "activespecial", "activespecialv2", "workspace", "workspacev2", "pin", "togglegroup", "moveintogroup", "moveoutofgroup"]
+  // changeworkspaceid renumbers a workspace under its windows (Omarchy's
+  // per-monitor blocks do this), so the snapshot's ids go stale with it.
+  readonly property var clientEvents: ["changeworkspaceid", "openwindow", "closewindow", "movewindow", "movewindowv2", "windowtitle", "windowtitlev2", "configreloaded", "activespecial", "activespecialv2", "workspace", "workspacev2", "pin", "togglegroup", "moveintogroup", "moveoutofgroup"]
 
   Connections {
     target: Hyprland
