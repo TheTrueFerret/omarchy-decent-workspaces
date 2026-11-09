@@ -142,6 +142,12 @@ omarchy plugin remove io.github.thetrueferret.decent-workspaces
 
 ## Development
 
+Run the client-model regression tests with Node.js (no QML runtime required):
+
+```bash
+node --test tests/clients.test.cjs
+```
+
 Editing a bar widget needs a shell restart — the "local plugin changed,
 reloading" hot reload does not rebuild bar surfaces:
 
@@ -161,6 +167,9 @@ workspace numbering added by [@jorgeccastro](https://github.com/jorgeccastro)
 (#3), the scratchpad pill suggested by
 [@sirfrank0](https://github.com/sirfrank0) (#4), and icon grouping added by
 [@batuhanmeral](https://github.com/batuhanmeral) (#9).
+
+Stale workspace icons were fixed by
+[@sametgultekin](https://github.com/sametgultekin) (#10).
 
 ## License
 
